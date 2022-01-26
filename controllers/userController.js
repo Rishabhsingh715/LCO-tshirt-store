@@ -238,6 +238,53 @@ exports.getLoggedInUserDetails = BigPromise(async(req,res,next)=>{
 
  });
 
+
+ exports.adminUpdateOneUserDetails = BigPromise(async(req,res,next)=>{
+
+    if(!req.body.email || !req.body.name){
+        return next(new CustomError("name and email both should be present to update", 400));
+    }
+
+    const newData = {
+        name: req.body.name,
+        email: req.body.email,
+        role: req.body.role
+    }
+
+    if(req.files){
+        const user = await User.findById(req.user.id);
+
+        const imageId = user.photo.id;
+
+        //delete photo on cloudinary
+        const resp = await cloudinary.v2.uploader.destroy(imageId);
+
+        //upload the new photo
+        const result = await cloudinary.v2.uploader.upload(req.files.photo.tempFilePath, {
+            folder: "users",
+            width: 150,
+            crop: "scale"
+        });
+
+        newData.photo = {
+            id: result.public_id,
+            secure_url: result.secure_url
+        }
+    }; 
+
+    const user = await User.findByIdAndUpdate(req.params.id, newData,{
+        new: true,
+        runValidators: true,
+        useFindAndModify: false
+    });
+
+    res.status(200).json({
+        success: true
+    });
+
+
+ });
+
  exports.adminAllUsers = BigPromise(async(req,res,next)=>{
 
     const user = await User.find();
@@ -247,6 +294,39 @@ exports.getLoggedInUserDetails = BigPromise(async(req,res,next)=>{
         user
     });
  });
+
+ exports.adminGetSingleUser = BigPromise(async(req,res,next)=>{
+    const user = await User.findById(req.params.id);
+
+    if(!user){
+        return next(new CustomError("user doesn't exists",401));
+    }
+
+    res.status(200).json({
+        success: true,
+        user
+    })
+ });
+
+ exports.adminDeleteOneUser = BigPromise(async(req,res,next)=>{
+     const user = await User.findById(req.params.id);
+
+     if(!user){
+         return next(new 
+            CustomError('user does not exists', 400));
+     }
+
+     await cloudinary.v2.uploader.destroy(user.photo.id);
+
+     await user.remove();
+     res.status(200).json({
+         success: true
+
+     })
+ })
+
+
+
  exports.managerAllUsers = BigPromise(async(req,res,next)=>{
 
     const users = await User.find({role: 'user'});
